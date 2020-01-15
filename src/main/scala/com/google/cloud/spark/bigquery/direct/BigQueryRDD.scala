@@ -54,21 +54,20 @@ class BigQueryRDD(sc: SparkContext,
     val client = getClient(options)
     // Taken from FileScanRDD
     context.addTaskCompletionListener(ctx => {
-      client.close
+      client.close()
       ctx
     })
 
-    val readRowResponses = ReadRowsHelper(
-      ReadRowsClientWrapper(client), request, options.maxReadRowsRetries)
-      .readRows()
-    val it = readRowResponses.flatMap(toRows)
-    return new InterruptibleIterator(context, it)
-
+    val readRowsHelper = ReadRowsHelper(ReadRowsClientWrapper(client), request, options.maxReadRowsRetries)
+    val it = readRowsHelper.readRows().flatMap(toRows)
+    new InterruptibleIterator(context, it)
   }
 
-  def toRows(response: ReadRowsResponse): Iterator[InternalRow] = new AvroBinaryIterator(
-    avroSchema,
-    response.getAvroRows.getSerializedBinaryRows).map(converter)
+  def toRows(response: ReadRowsResponse): Iterator[InternalRow] =
+    new AvroBinaryIterator(
+      avroSchema,
+      response.getAvroRows.getSerializedBinaryRows
+    ).map(converter)
 
   override protected def getPartitions: Array[Partition] = parts
 
@@ -81,7 +80,6 @@ class BigQueryRDD(sc: SparkContext,
 
     override def next(): GenericRecord = reader.read(null, in)
   }
-
 }
 
 case class BigQueryPartition(stream: String, index: Int) extends Partition
@@ -90,19 +88,18 @@ trait ReadRowsClient extends AutoCloseable {
   def readRowsCallable: ServerStreamingCallable[ReadRowsRequest, ReadRowsResponse]
 }
 
-case class ReadRowsClientWrapper(client: BigQueryStorageClient)
-  extends ReadRowsClient {
+case class ReadRowsClientWrapper(client: BigQueryStorageClient) extends ReadRowsClient {
 
-  override def readRowsCallable: ServerStreamingCallable[ReadRowsRequest, ReadRowsResponse] =
-    client.readRowsCallable
+  override def readRowsCallable: ServerStreamingCallable[ReadRowsRequest, ReadRowsResponse] = client.readRowsCallable
 
-  override def close: Unit = client.close
+  override def close(): Unit = client.close()
 }
 
 case class ReadRowsHelper(
                            client: ReadRowsClient,
                            request: ReadRowsRequest.Builder,
                            maxReadRowsRetries: Int) {
+
   def readRows(): Iterator[ReadRowsResponse] = {
     val readPosition = request.getReadPositionBuilder
     val readRowResponses = new MutableList[ReadRowsResponse]

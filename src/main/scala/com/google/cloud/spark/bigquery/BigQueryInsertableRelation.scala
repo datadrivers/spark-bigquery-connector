@@ -17,7 +17,7 @@ package com.google.cloud.spark.bigquery
 
 import java.math.BigInteger
 
-import com.google.cloud.bigquery.{BigQuery, TableDefinition}
+import com.google.cloud.bigquery.{BigQuery, Table, TableDefinition}
 import com.typesafe.scalalogging.Logger
 import org.apache.spark.sql.sources.{BaseRelation, InsertableRelation}
 import org.apache.spark.sql.types.StructType
@@ -28,9 +28,9 @@ import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
  * number of records, size, etc.) is done by API calls without reading existing
  * data
  */
-case class BigQueryInsertableRelation(val bigQuery: BigQuery,
-                                      val sqlContext: SQLContext,
-                                      val options: SparkBigQueryOptions)
+case class BigQueryInsertableRelation(bigQuery: BigQuery,
+                                      sqlContext: SQLContext,
+                                      options: SparkBigQueryOptions)
   extends BaseRelation
     with InsertableRelation {
 
@@ -58,14 +58,14 @@ case class BigQueryInsertableRelation(val bigQuery: BigQuery,
   /**
    * Is this table empty? A none-existing table is considered to be empty
    */
-  def isEmpty: Boolean = numberOfRows.map(n => n.longValue() == 0).getOrElse(true)
+  def isEmpty: Boolean = numberOfRows.forall(n => n.longValue() == 0)
 
   /**
    * Returns the number of rows in the table. If the table does not exist return None
    */
-  private def numberOfRows: Option[BigInteger] = getTable.map(t => t.getNumRows())
+  private def numberOfRows: Option[BigInteger] = getTable.map(t => t.getNumRows)
 
-  private def getTable = Option(bigQuery.getTable(options.tableId))
+  private def getTable: Option[Table] = Option(bigQuery.getTable(options.tableId))
 
   override def schema: StructType = {
     val tableInfo = bigQuery.getTable(options.tableId)
@@ -74,6 +74,3 @@ case class BigQueryInsertableRelation(val bigQuery: BigQuery,
   }
 
 }
-
-
-

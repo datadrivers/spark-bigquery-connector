@@ -74,12 +74,49 @@ object SchemaConverters {
       StructField(field.getName, dataType, nullable)
     }
 
-
     val res = StructType(schema.getFields.asScala.map(convert))
     log.debug(s"BQ Schema:\n'${schema.toString}'\n\nSpark schema:\n${res.treeString}")
     res
   }
 
+  def toBigQuerySchema(structType: StructType): Schema ={
+    val fields = structType.fields.map(field => {
+      var builder = Field.newBuilder(field.name, LegacySQLTypeName.STRING)
+      builder = field.dataType match{
+          case ArrayType(elementType, _) => builder.setType(toLegacySQLTypeName(elementType)).setMode(Field.Mode.REPEATED)
+          case otherType: DataType => builder.setType(toLegacySQLTypeName(otherType))
+        }
+      if(field.nullable) {
+        builder = builder.setMode(Field.Mode.NULLABLE)
+      }
+      else{
+        builder = builder.setMode(Field.Mode.REQUIRED)
+      }
+      field.getComment() match{
+        case Some(c) => builder = builder.setDescription(c)
+        case None =>
+      }
+      builder.build()
+    })
+    Schema.of(fields.toSeq.asJava)
+  }
+
+  private def toLegacySQLTypeName(datatype: DataType): LegacySQLTypeName = datatype match{
+    case BinaryType => BYTES
+    case BooleanType => BOOLEAN
+    case ByteType => BYTES
+    case CharType(_) => STRING
+    case DateType => DATE
+    case DecimalType() => NUMERIC
+    case DoubleType => FLOAT
+    case FloatType => FLOAT
+    case IntegerType => INTEGER
+    case LongType => INTEGER
+    case ShortType => INTEGER
+    case StringType => STRING
+    case TimestampType => TIMESTAMP
+    case unsupported: DataType => throw new UnsupportedOperationException(s"SPARK ${unsupported.simpleString} is an unsupported DataType for BigQuery.")
+  }
 
   /**
    * Create a function that converts an Avro row with the given BigQuery schema to a Spark SQL row

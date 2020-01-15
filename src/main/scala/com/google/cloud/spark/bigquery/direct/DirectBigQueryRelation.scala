@@ -40,18 +40,15 @@ import scala.collection.JavaConverters._
 private[bigquery] class DirectBigQueryRelation(
     options: SparkBigQueryOptions,
     table: TableInfo,
-    getClient: SparkBigQueryOptions => BigQueryStorageClient =
-         DirectBigQueryRelation.createReadClient,
-    bigQueryClient: SparkBigQueryOptions => BigQuery =
-         DirectBigQueryRelation.createBigQueryClient)
-    (@transient override val sqlContext: SQLContext)
-    extends BigQueryRelation(options, table)(sqlContext)
+    getClient: SparkBigQueryOptions => BigQueryStorageClient = DirectBigQueryRelation.createReadClient,
+    bigQueryClient: SparkBigQueryOptions => BigQuery = DirectBigQueryRelation.createBigQueryClient
+  )(@transient override val sqlContext: SQLContext) extends BigQueryRelation(options, table)(sqlContext)
         with TableScan with PrunedScan with PrunedFilteredScan {
 
   val tableReference: TableReference =
     DirectBigQueryRelation.toTableReference(tableId)
 
-  lazy val bigQuery = bigQueryClient(options)
+  lazy val bigQuery: BigQuery = bigQueryClient(options)
 
   // used to cache the table instances in order to avoid redundant queries to
   // the BigQuery service
@@ -73,7 +70,7 @@ private[bigquery] class DirectBigQueryRelation(
    * BigQuery Storage API. The number of partitions returned may be significantly less depending
    * on a number of factors.
    */
-  val DEFAULT_BYTES_PER_PARTITION = 400L * 1000 * 1000
+  val DEFAULT_BYTES_PER_PARTITION: Long = 400L * 1000 * 1000
 
   override val needConversion: Boolean = false
   override val sizeInBytes: Long = defaultTableDefinition.getNumBytes

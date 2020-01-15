@@ -17,6 +17,7 @@ package com.google.cloud.spark.bigquery
 
 import java.util.UUID
 
+import com.google.cloud.bigquery.JobInfo.CreateDisposition
 import com.google.cloud.bigquery.{BigQuery, BigQueryException, JobInfo, LoadJobConfiguration}
 import com.google.cloud.http.BaseHttpServiceException
 import com.typesafe.scalalogging.Logger
@@ -82,13 +83,18 @@ case class BigQueryWriteHelper(bigQuery: BigQuery,
       .toList
       .asJava
 
-    val jobConfiguration = LoadJobConfiguration.newBuilder(
+    val jobBuilder = LoadJobConfiguration.newBuilder(
       options.tableId, sourceUris, options.intermediateFormat)
-      .setCreateDisposition(JobInfo.CreateDisposition.CREATE_IF_NEEDED)
       .setWriteDisposition(saveModeToWriteDisposition(saveMode))
-      .build
+      .setCreateDisposition(options.createTableIfNeeded)
 
-    val jobInfo = JobInfo.of(jobConfiguration)
+    if(options.createTableIfNeeded == CreateDisposition.CREATE_IF_NEEDED) {
+      options.schema match {
+        case Some(s) => jobBuilder.setSchema(SchemaConverters.toBigQuerySchema(s))
+        case None => jobBuilder.setAutodetect(true)
+      }
+    }
+    val jobInfo = JobInfo.of(jobBuilder.build())
     val job = bigQuery.create(jobInfo)
 
     logger.info(s"Submitted load to ${options.tableId}. jobId: ${job.getJobId}")

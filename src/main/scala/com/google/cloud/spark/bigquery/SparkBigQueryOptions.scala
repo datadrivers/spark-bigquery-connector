@@ -20,9 +20,13 @@ import java.io.{ByteArrayInputStream, FileInputStream}
 import com.google.api.client.util.Base64
 import com.google.auth.Credentials
 import com.google.auth.oauth2.GoogleCredentials
+import com.google.cloud.bigquery.JobInfo.CreateDisposition
 import com.google.cloud.bigquery.{BigQueryOptions, FormatOptions, TableId}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.types.StructType
+import SparkBigQueryOptions._
+
+import scala.util.Try
 
 /** Options for defining {@link BigQueryRelation}s */
 case class SparkBigQueryOptions(
@@ -39,8 +43,10 @@ case class SparkBigQueryOptions(
   viewsEnabled: Boolean = false,
   viewMaterializationProject: Option[String] = None,
   viewMaterializationDataset: Option[String] = None,
-  viewExpirationTimeInHours: Int = 24,
-  maxReadRowsRetries: Int = 3) {
+  viewExpirationTimeInHours: Int = DefaultViewExpirationTimeInHours,
+  maxReadRowsRetries: Int = DefaultMaxReadRowsRetries,
+  createTableIfNeeded: CreateDisposition = CreateDisposition.CREATE_NEVER
+ ) {
 
   def createCredentials: Option[Credentials] =
     (credentials, credentialsFile) match {
@@ -62,6 +68,9 @@ object SparkBigQueryOptions {
 
   val IntermediateFormatOption = "intermediateFormat"
   val ViewsEnabledOption = "viewsEnabled"
+
+  val DefaultViewExpirationTimeInHours: Int = 24
+  val DefaultMaxReadRowsRetries: Int = 3
 
   val DefaultFormat: FormatOptions = FormatOptions.parquet()
   private val PermittedIntermediateFormats = Set(FormatOptions.orc(), FormatOptions.parquet())
@@ -100,11 +109,27 @@ object SparkBigQueryOptions {
       getAnyOption(allConf, parameters, "viewMaterializationProject")
     val viewMaterializationDataset =
       getAnyOption(allConf, parameters, "viewMaterializationDataset")
+    val viewExpirationTimeInHours = getAnyOption(allConf, parameters, "viewExpirationTimeInHours") match{
+      case Some(h) =>
+        Try{h.trim.toInt}.getOrElse(throw new IllegalArgumentException(s"Invalid option for viewExpirationTimeInHours: $h. Expected an integer."))
+      case None => DefaultViewExpirationTimeInHours
+    }
+    val maxReadRowsRetries = getAnyOption(allConf, parameters, "maxReadRowsRetries") match{
+      case Some(h) =>
+        Try{h.trim.toInt}.getOrElse(throw new IllegalArgumentException(s"Invalid option for maxReadRowsRetries: $h. Expected an integer."))
+      case None => DefaultMaxReadRowsRetries
+    }
+    val createTableIfNeeded =
+      if (getAnyBooleanOption(allConf, parameters, "createTableIfNeeded", defaultValue = false)) {
+        CreateDisposition.CREATE_IF_NEEDED
+      } else {
+        CreateDisposition.CREATE_NEVER
+      }
 
     SparkBigQueryOptions(tableId, parentProject, credsParam, credsFileParam,
       filter, schema, parallelism, temporaryGcsBucket, intermediateFormat,
       combinePushedDownFilters, viewsEnabled, viewMaterializationProject,
-      viewMaterializationDataset)
+      viewMaterializationDataset, viewExpirationTimeInHours, maxReadRowsRetries, createTableIfNeeded)
   }
 
   private def defaultBilledProject = () =>

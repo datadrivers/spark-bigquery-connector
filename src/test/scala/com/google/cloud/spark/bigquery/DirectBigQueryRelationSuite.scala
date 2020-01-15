@@ -155,7 +155,4 @@ class DirectBigQueryRelationSuite
     val result2 = r.getCompiledFilter(filters)
     result2 shouldBe resultWithFilters
   }
-
-
 }
-
